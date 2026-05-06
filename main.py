@@ -3,26 +3,25 @@ import geopandas as gpd
 import folium
 from streamlit_folium import folium_static
 
-st.set_page_config(page_title="SIG Hann Bel-Air", layout="wide")
+st.set_page_config(page_title="Système d'Information Géographique", layout="wide")
 
-st.title("📍 Application SIG - Hann Bel-Air")
-st.subheader("Gestion des infrastructures et du réseau routier")
+st.title("📍 Application de Cartographie Interactive")
+st.subheader("Analyse des infrastructures et du réseau routier")
 
-# Fonction optimisée pour charger les données
+# Fonction pour charger les données
 @st.cache_data
 def load_data(file_path):
     try:
         gdf = gpd.read_file(file_path)
+        # S'assurer que le CRS est en WGS84 pour Folium
         if gdf.crs != "EPSG:4326":
             gdf = gdf.to_crs(epsg=4326)
         return gdf
     except Exception as e:
         return None
 
-# Dictionnaire mis à jour avec TOUS vos fichiers
+# Liste de vos fichiers
 files = {
-    "Limites de la Commune": "commune.shp",
-    "Réseau Routier Hann Bel-Air": "routes hann bel air.shp",
     "Arrêts": "Arrêts.shp",
     "Axes de sorties": "Axes de sorties.shp",
     "Axes d'entrées": "Axes d'entrées.shp",
@@ -35,50 +34,42 @@ files = {
     "Stations Service": "station service.shp"
 }
 
-# Sidebar pour le contrôle des couches
-st.sidebar.header("Paramètres d'affichage")
+# Sidebar pour le filtrage
+st.sidebar.header("Couches thématiques")
 selected_layers = []
 for label, path in files.items():
-    # On coche par défaut la commune et les routes
-    default_value = True if label in ["Limites de la Commune", "Réseau Routier Hann Bel-Air"] else False
-    if st.sidebar.checkbox(label, value=default_value):
+    if st.sidebar.checkbox(label, value=True):
         selected_layers.append((label, path))
 
-# Centrage de la carte sur Hann Bel-Air
-m = folium.Map(location=[14.7167, -17.4333], zoom_start=14, control_scale=True)
+# Initialisation de la carte centrée sur la zone d'étude
+m = folium.Map(location=[14.7167, -17.4677], zoom_start=13, control_scale=True)
 
-# Boucle d'affichage des couches
+# Ajout des couches à la carte
 for label, path in selected_layers:
     data = load_data(path)
     if data is not None:
-        # Personnalisation des styles
-        style = {'weight': 2, 'fillOpacity': 0.1}
+        # Style spécifique selon le type de donnée
+        color = "blue"
+        if "Dégâts" in label: color = "red"
+        elif "Hôpitaux" in label or "Pompiers" in label: color = "orange"
+        elif "Écoles" in label: color = "green"
         
-        if "Commune" in label:
-            style = {'color': 'black', 'weight': 3, 'dashArray': '5, 5', 'fillOpacity': 0}
-        elif "Routes" in label:
-            style = {'color': 'gray', 'weight': 1.5}
-        elif "Dégâts" in label:
-            style = {'color': 'red', 'weight': 4}
-        elif "AFTU" in label:
-            style = {'color': 'blue', 'weight': 2.5}
-            
         folium.GeoJson(
             data,
             name=label,
-            style_function=lambda x, s=style: s,
-            tooltip=folium.GeoJsonTooltip(fields=[data.columns[0]], aliases=["Détail :"])
+            tooltip=folium.GeoJsonTooltip(fields=[data.columns[0]], aliases=["Info:"]),
+            style_function=lambda x, color=color: {'color': color, 'weight': 3, 'fillOpacity': 0.5}
         ).add_to(m)
 
 folium.LayerControl().add_to(m)
 
-# Affichage Web
-folium_static(m, width=1100, height=700)
+# Affichage de la carte
+folium_static(m, width=1000, height=600)
 
-# Section Statistiques
-st.sidebar.markdown("---")
-st.sidebar.write("### Statistiques des données")
-for label, path in selected_layers:
+# Statistiques rapides
+st.write("### Résumé des données affichées")
+cols = st.columns(3)
+for i, (label, path) in enumerate(selected_layers):
     data = load_data(path)
     if data is not None:
-        st.sidebar.info(f"**{label}**: {len(data)} éléments")
+        cols[i % 3].metric(label, f"{len(data)} entités")
